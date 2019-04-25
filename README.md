@@ -1,1 +1,2 @@
-# Senior Thesis: Hidden Markov Models for Music Classification
+# Senior Thesis
+Hidden Markov Models for Music Classification
