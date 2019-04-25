@@ -1,0 +1,63 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+test.Bach <- data.frame(read.csv("test_Bach_mfcc2.csv"))
+for (i in 2:dim(test.Bach)[2]){
+  print (i)
+  sorted.composer <- test.Bach[order(test.Bach[,i], decreasing = T),][,1]
+  top.three <- head(sorted.composer,5)
+  print(top.three)
+}
+```
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+test.Beethoven <- data.frame(read.csv("test_Beethoven2.csv"))
+for (i in 2:dim(test.Beethoven)[2]){
+  print (i)
+  sorted.composer <- test.Beethoven[order(test.Beethoven[,i], decreasing = T),][,1]
+  top.three <- head(sorted.composer,5)
+  print(top.three)
+}
+```
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+test.Chopin <- data.frame(read.csv("test_Chopin.csv"))
+for (i in 2:dim(test.Chopin)[2]){
+  print (i)
+  sorted.composer <- test.Chopin[order(test.Chopin[,i], decreasing = T),][,1]
+  top.three <- head(sorted.composer,4)
+  print(top.three)
+}
+```
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+test.Debussy <- data.frame(read.csv("test_Debussy.csv"))
+for (i in 2:dim(test.Debussy)[2]){
+  print (i)
+  sorted.composer <- test.Debussy[order(test.Debussys[,i], decreasing = T),][,1]
+  top.three <- head(sorted.composer,4)
+  print(top.three)
+}
+```
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+test.Schubert <- data.frame(read.csv("test_schubert_mfcc2.csv"))
+for (i in 2:dim(test.Schubert)[2]){
+  print (i)
+  sorted.composer <- test.Schubert[order(test.Schubert[,i], decreasing = T),][,1]
+  top.three <- head(sorted.composer,4)
+  print(top.three)
+}
+```

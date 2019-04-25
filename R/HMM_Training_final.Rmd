@@ -1,0 +1,774 @@
+---
+title: "HMM training"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{python}
+import os
+#import pandas
+import librosa
+import librosa.display
+import glob
+import errno
+import scipy as sklearn
+import csv
+import sklearn.preprocessing
+from sklearn.cluster import KMeans
+from sklearn import mixture
+import numpy as np
+from numpy import array
+import scipy.cluster.vq
+from scipy.cluster.vq import vq
+from scipy.cluster.vq import whiten
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import re
+
+folder_array = ['../audio/Bach_Fugue/wav/*.wav', '../audio/Beethoven_sonata/wav/*.wav', '../audio/Chopin_nocturne_waltz/wav/*.wav','../audio/Debussy/wav/*.wav', '../audio/Schubert/wav/*.wav','../audio/Schoenberg/wav/*.wav','../audio/Schumann/wav/*.wav' ]
+mfcc_array = ['Bach', 'Beethoven', 'Chopin', 'Debussy', 'Schubert', 'Schoenberg','Schumann']
+
+i=0
+for folder in folder_array:
+	files = glob.glob(folder)
+	for piece in files:
+		piece_name = piece[piece.find('\\')+1:piece.find('.wav')]
+		print(piece_name)
+		y, sr = librosa.load(piece)
+		mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=int(0.025*sr), n_fft=int(0.025*sr), n_mfcc=20)
+		mfcc = whiten(mfcc) #scale the MFCC such that each coefficient dimension has zero mean and unit variance
+		mfcc = mfcc[:12]
+	 	#for i in range(0,12):
+		#	x = np.arange(0,len(mfcc[i]))
+		#	plt.plot(x, mfcc[i])
+		#plt.show();	
+		mfcc_transpose = mfcc.transpose()
+		sequence = mfcc_transpose
+
+		with open("../mfcc/" + mfcc_array[i] + '/'+ piece_name + '.csv', 'w') as outfile:
+			writer = csv.writer(outfile)
+			for j in range(0,len(sequence)):
+				writer.writerow(sequence[j])
+	i+=1
+```
+
+```{r}
+#store MFCC data
+composer.list <- list()
+test.list <- list()
+folder.list <-list("Bach", "Beethoven", "Chopin", "Debussy", "Schubert", "Schoenberg", "Schumann")
+train.name.list <- list()
+test.name.list <- list()
+for(i in 1:length(folder.list)){
+  directory <-paste("C:/Users/Xinru/Documents/wheaton/thesis/HMM_for_Music_Classification/mfcc/",folder.list[[i]], sep="")
+  setwd(directory)
+  folder <- paste("C:/Users/Xinru/Documents/wheaton/thesis/HMM_for_Music_Classification/mfcc/",folder.list[[i]], "/",sep="")
+  list <- list.files(path=folder, pattern = "*.csv")
+  sample.size <- floor(0.75*length(list)) 
+  
+  #set seed to ensure you always have same random numbers generated
+  set.seed(123)  
+  #Randomly identifies therows equal to sample size
+  train_ind <- sample(seq_len(length(list)),size = sample.size)
+  #creates the training dataset with row numbers stored in train_ind
+  train.name <- list[train_ind]
+  train.name.list[[i]] <- train.name
+  test.name <- list[-train_ind] 
+  test.name.list[[i]] <- test.name
+  
+  training <- list()
+  for (j in 1:(length(train.name))){
+    mfcc <- data.frame(read.csv(train.name[j], header = F))
+    training[[j]] <- mfcc
+  }
+  composer.list[[i]] <- training
+  
+  testing <- list()
+  for(k in 1:length(test.name)){
+    mfcc <- data.frame(read.csv(test.name[k], header = F))
+    testing[[k]] <- mfcc
+  }
+  test.list[[i]] <- testing
+}
+```
+
+```{r}
+#train initial model
+#hmm.list2
+hmm.list <- list()
+fail.list <- list()
+for (i in 1:length(composer.list)){
+  trained.list <- list()
+  error.list <- list()
+  success.index <- 1
+  fail.index <- 1
+  for(j in 1:length(composer.list[[i]])){
+    #if (j==1){
+      #clustering
+      mfcc <- composer.list[[i]][[j]]
+      #split.mfcc <- split(mfcc, (seq(nrow(mfcc))-1) %/% 10)
+      #mean.list <- list()
+      #for (k in 1:length(split.mfcc)){
+      #  mean.list[[k]] <- as.vector(apply(split.mfcc[[k]], MARGIN=2, FUN = "mean"))
+      #}
+      #mean.list <- data.frame(mean.list)
+      BIC <- mclustBIC(mfcc)
+      plot(BIC)
+      mod <- Mclust(mfcc, x = BIC)
+      summary(mod, parameters = TRUE)
+      cluster.num <- mod$G
+      #set a criterion to avoid the "occurrence in at least one state = 0" error
+      final.cluster <- which(mod$parameters$pro > 0)
+      cluster.num <- length(final.cluster)
+      #train model
+      init0 <- rep(1/cluster.num, cluster.num)
+      P <- matrix(rep(1/cluster.num, cluster.num*cluster.num), ncol = cluster.num)
+      mu<-list()
+      sigma <- list()
+      for (m in 1:cluster.num){
+        mu[[m]] <- mod$parameters$mean[,final.cluster[[m]]]
+        sigma[[m]] <- mod$parameters$variance$sigma[,,final.cluster[[m]]]
+        #check positive definite
+        #if(!is.positive.definite(sigma[[m]])) 
+          #sigma[[m]] <- make.positive.definite(sigma[[m]])
+        #print(is.positive.definite(sigma[[m]]))
+      }
+      B0 <- list(mu = mu, sigma = sigma)
+      train<-list(x=mfcc, N=dim(mfcc)[1])
+      class(train) <- "hsmm.data"
+      startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+      hmv <- tryCatch(hmmfit(train, startval, mstep = mstep.mvnorm), error = function(e)e)
+      #hmv <-hmmfit(train, startval, mstep = mstep.mvnorm)
+      if(inherits(hmv, "error")){
+        print("error")
+        error.list[[fail.index]] <- j
+        fail.index <- fail.index + 1
+      }
+      else{
+        trained.list[[success.index]] <- hmv
+        success.index <- success.index + 1
+      }
+    #}
+  }
+  hmm.list[[i]] <- trained.list
+  fail.list[[i]] <- error.list
+}
+```
+
+```{r}
+#hmm.list <- list(Bach.trained.list, Beethoven.trained.list, Chopin.trained.list, Debussy.trained.list)
+for (i in 1:length(hmm.list)){
+  for (j in 1:length(hmm.list[[i]])){
+    for(l in 1:length(hmm.list[[i]][[j]]$model$parms.emission$sigma))
+    if(!is.positive.definite(hmm.list[[i]][[j]]$model$parms.emission$sigma[[l]])){
+        hmm.list[[i]][[j]]$model$parms.emission$sigma[[l]] <- make.positive.definite(hmm.list[[i]][[j]]$model$parms.emission$sigma[[l]])
+       
+    }
+    print(is.positive.definite(hmm.list[[i]][[j]]$model$parms.emission$sigma[[l]]))
+  }
+}
+```
+
+```{r}
+temp.name.list <- train.name.list
+```
+
+```{r}
+#Exclude failed model piece name from the original piece name
+for (i in 1:(length(temp.name.list))){
+  if(length(fail.list[[i]])!=0){
+      fail.index.list <- unlist(fail.list[[i]], use.names = F)
+      print(fail.index.list)
+      temp.name.list[[i]] <- temp.name.list[[i]][-fail.index.list]
+  }
+  #temp.name.list[[1]] <- lapply(temp.name.list[[1]], function(x) {x[x!=0]})
+}
+```
+
+```{r}
+total.training <- length(hmm.list[[1]]) + length(hmm.list[[2]]) + length(hmm.list[[3]]) + length(hmm.list[[4]]) + length(hmm.list[[5]]) + length(hmm.list[[6]]) + length(hmm.list[[7]])
+Bach.trained.list <- hmm.list[[1]]
+Beethoven.trained.list <- hmm.list[[2]]
+Chopin.trained.list <- hmm.list[[3]]
+Debussy.trained.list <- hmm.list[[4]]
+Schubert.trained.list <- hmm.list[[5]]
+Schoenberg.trained.list <- hmm.list[[6]]
+Schumann.trained.list <- hmm.list[[7]]
+```
+
+
+```{r}
+#test Bach pieces
+  output <- matrix(ncol = length(test.list[[1]]), nrow = total.training)
+  n <- 1
+  for(j in 1:length(test.list[[1]])){
+    m <- 1
+    mfcc <- test.list[[1]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      temp.hmm <- Bach.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+                , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      temp.hmm <- Beethoven.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      temp.hmm <- Chopin.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      temp.hmm <- Debussy.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+}
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[1]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Bach_mfcc.csv")
+
+```
+
+```{r}
+#test Beethoven pieces
+output <- matrix(ncol = length(test.list[[2]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[2]])){
+    m <- 1
+    mfcc <- test.list[[2]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[2]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Beethoven_mfcc.csv")
+```
+
+
+```{r}
+#test Chopin pieces
+output <- matrix(ncol = length(test.list[[3]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[3]])){
+    m <- 1
+    mfcc <- test.list[[3]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[3]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Chopin_mfcc.csv")
+```
+
+
+```{r}
+#test Debussy pieces
+output <- matrix(ncol = length(test.list[[4]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[4]])){
+    m <- 1
+    mfcc <- test.list[[4]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[4]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Debussy_mfcc.csv")
+```
+```{r}
+#test Schubert pieces
+output <- matrix(ncol = length(test.list[[5]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[5]])){
+    m <- 1
+    mfcc <- test.list[[5]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[5]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Schubert_mfcc.csv")
+```
+
+
+```{r}
+#test Schoenbery pieces
+output <- matrix(ncol = length(test.list[[6]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[6]])){
+    m <- 1
+    mfcc <- test.list[[6]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[6]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Schoenberg_mfcc.csv")
+```
+
+
+```{r}
+#test Schumann pieces
+output <- matrix(ncol = length(test.list[[7]]), nrow = total.training)
+n <- 1
+  for(j in 1:length(test.list[[7]])){
+    m <- 1
+    mfcc <- test.list[[7]][[j]]
+    test<-list(x=mfcc, N=dim(mfcc)[1])
+    class(test) <- "hsmm.data"
+    #cat(j, "th testing piece \n")
+    for (k in 1:length(Bach.trained.list)){
+      hmm.test <- try(hmmfit(test, Bach.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Beethoven.trained.list)){
+      hmm.test <- try(hmmfit(test, Beethoven.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Chopin.trained.list)){
+      hmm.test <- try(hmmfit(test, Chopin.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Debussy.trained.list)){
+      hmm.test <- try(hmmfit(test, Debussy.trained.list[[k]]$model, mstep = mstep.mvnorm, maxit = 1))
+      
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schubert.trained.list)){
+      temp.hmm <- Schubert.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schoenberg.trained.list)){
+      temp.hmm <- Schoenberg.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    for (k in 1:length(Schumann.trained.list)){
+      temp.hmm <- Schumann.trained.list[[k]]
+      #temp.hmm$model$init <- rep(1/temp.hmm$model$J, temp.hmm$model$J)
+      hmm.test <- try(hmmfit(test, temp.hmm$model, mstep = mstep.mvnorm, maxit = 1))
+  
+      tryCatch( { loglike <- hmm.test$loglik; output[m,n] <- loglike }
+          , error = function(e) {print("An error occurs")})
+      m <- m+1
+    }
+    n <- n+1
+  }
+output <- data.frame(output)
+format(output, digits=2, nsmall=2)
+colnames(output)<-sprintf(test.name.list[[7]])
+rownames(output)<-c(sprintf(temp.name.list[[1]]), sprintf(temp.name.list[[2]]), sprintf(temp.name.list[[3]]), sprintf(temp.name.list[[4]]), sprintf(temp.name.list[[5]]), sprintf(temp.name.list[[6]]), sprintf(temp.name.list[[7]]))
+write.csv(format(output, digits=2, nsmall=2), file = "../output/test_Schumann_mfcc.csv")
+```
+
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/HMM_for_Music_Classification/output")
+test.file.list <- c("test_Bach_mfcc.csv", "test_Beethoven_mfcc.csv", "test_Chopin_mfcc.csv", "test_Debussy_mfcc.csv", "test_Schubert_mfcc.csv",
+                    "test_Schoenberg_mfcc.csv", "test_Schumann_mfcc.csv")
+composer.name <- c("Bach", "Beethoven", "Chopin", "Debussy", "Schubert", "Schoenberg", "Schumann")
+p = 1
+#for (filename in test.file.list){
+  test.composer <-data.frame(read.csv("test_Debussy_mfcc.csv", header =T))
+  column.name <- colnames(test.composer)[-1]
+  column.name <- gsub('_', ' ', column.name)
+  column.name <- gsub('.csv', ' ', column.name)
+  #print(column.name)
+  col.num <- dim(test.composer)[2]-1
+  result <- matrix(ncol = 4, nrow = col.num)
+  for (i in 2:dim(test.composer)[2]){
+    print(i-1)
+    test.composer[,i] <- as.numeric(as.character(test.composer[,i]))
+    sorted.composer <- test.composer[order(test.composer[,i], decreasing = T),][,1]
+    sorted.log <- test.composer[order(test.composer[,i], decreasing = T),][,i]
+    top.five.file <- head(sorted.composer,4)
+    top.five.log <- head(sorted.log, 4)
+    for (n in 1:4){
+      file.name <- as.character(top.five.file[n])
+      file.name <- gsub('_', ' ', file.name)
+      file.name <- gsub('.csv', ' ', file.name)
+      tog <- paste(file.name, as.character(top.five.log)[n], sep=" ")
+      result[i-1, n] <- tog
+    }
+  }
+  result <- data.frame(result)
+  colnames(result) <- c("1st piece name (score)", "2nd piece name (score)",  "3rd piece name (score)")
+  rownames(result) <- column.name
+  write.csv(result, file = paste("test", composer.name[4],"result2.csv", sep="_"))
+  p <- p+1
+  #print(result)
+#}
+```
+
+
+```{r}
+#create similarity matrix for transition matrix
+tran.matrix.list <- c()
+for (i in 1:length(hmm.list)){
+  for (j in 1:length(hmm.list[[i]])){
+    tran.matrix <- hmm.list[[i]][[j]]$model$transition
+    tran.matrix.list <- append(tran.matrix.list, tran.matrix)
+  }
+}
+```
+
+
+
+
+

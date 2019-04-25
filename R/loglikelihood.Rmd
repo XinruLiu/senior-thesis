@@ -1,0 +1,73 @@
+---
+title: "loglikelihood"
+
+---
+
+```{r}
+#mhsmm package
+init0 <- c(0.5, 0.5)
+a <- matrix(c(0.7, 0.3, 0.3, 0.7),byrow = T, nrow = 2)
+b <- list(mu=c(5, -5), sigma=c(10, 10))
+hmm.startval<- hmmspec(init = init0, trans = a, parms.emission = b, dens.emission = dnorm.hsmm)
+train <- list(x=(logreturns(Prices))*10, N=length((logreturns(Prices))*10))
+class(train) <- "hsmm.data"
+h1<-hmmfit(train, hmm.startval, mstep=mstep.norm, maxit = 10)
+print(h1$model)
+print(h1$loglik)
+
+```
+
+```{r}
+#HMMCont
+Returns<-(logreturns(Prices))*10
+hmm <- hmmsetcont(Returns, Pi1 = 0.5, Pi2 = 0.5, A11 = 0.7, A12 = 0.3,A21 = 0.3, A22 = 0.7, Mu1 = 5, Mu2 = (-5), Var1 = 10, Var2 = 10)
+for(i in 1:10){
+  hmm <- baumwelchcont(hmm)
+}
+
+print(hmm)
+```
+
+
+
+```{r}
+forward <- function(init,transition,alpha,b,i) {
+    stopifnot(NROW(transition)==NCOL(transition))
+    stopifnot(NROW(transition)==length(init))
+    stopifnot(NCOL(b)==length(init))
+    if(i==1) {
+        forward(init,transition,init * b[i,],b,i+1)
+    } else if(i<=NROW(b)) {
+        forward(init,transition,(alpha%*%transition )*b[i,],b,i+1)
+    }
+    else {
+        log(sum(alpha))
+    }
+}
+
+```
+
+```{r}
+library(mhsmm)
+
+J<-3
+initial <- rep(1/J,J)
+P <- matrix(c(.5,.3,.25,0.25,.4,.25,.25,.3,.5),nrow=J)
+b <- list(mu=c(0.87, 0.14, 0.39),sigma=rep(1,J))
+model <- hmmspec(init=initial, trans=P, parms.emission=b,dens.emission=dnorm.hsmm)
+set.seed(123)
+L <- 10
+train <- simulate(model, nsim=L, seed=1234, rand.emis=rnorm.hsmm)
+
+observed.density <- matrix(sapply(model$parms.emission$mu,function(m) dnorm(train$x,m)),nrow=L)
+
+forward(model$init,model$transition,NULL,observed.density,1)
+model2 <- hmmfit(train,model,maxit=10)
+model2$loglik
+#observed.density2 <- matrix(sapply(model2$model$parms.emission$mu,function(m) dnorm(train$x,m)),nrow=L)
+#model2 <- forward(model2$model$init, model2$model$transition, NULL, observed.density2,1)
+#model2
+
+
+```
+

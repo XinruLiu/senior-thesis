@@ -1,0 +1,293 @@
+---
+title: "HMM training Beethovan"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r}
+#train the Bach HMM
+
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+Bamfcc1 <- data.frame(read.csv("Bachmfcc1.csv", header=F))
+
+split.Bamfcc1 <- split(Bamfcc1, (seq(nrow(Bamfcc1))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+Bach.mean.list <- list()
+for (i in 1:length(split.Bamfcc1)){
+  Bach1.mean.list[[i]] <- as.vector(apply(split.Bamfcc1[[i]], MARGIN=2, FUN = "mean"))
+}
+Bach1.mean.list <- data.frame(Bach1.mean.list)
+colnames(Bach1.mean.list)<-c(paste(rep("group", ncol(Bach1.mean.list)), seq(1:length(split.Bamfcc1))))
+
+#determine the state numbers and GMM clustering
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(t(Bach1.mean.list), k)$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+BIC <- mclustBIC(t(Bach1.mean.list))
+#plot(BIC)
+mod1 <- Mclust(t(Bach1.mean.list), x = BIC)
+#summary(mod1, parameters = TRUE)
+
+#training
+J=mod1$G
+init0 <- rep(1/J, J)
+P <- matrix(rep(1/J, J*J), ncol = J)
+B0 <- list(mu = list(mod1$parameters$mean[,1], mod1$parameters$mean[,2], mod1$parameters$mean[,3]), sigma = list(mod1$parameters$variance$sigma[,,1], mod1$parameters$variance$sigma[,,2], mod1$parameters$variance$sigma[,,3]))
+train<-list(x=Bamfcc1, N=dim(Bamfcc1)[1])
+class(train) <- "hsmm.data"
+startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+hmv.Ba <- hmmfit(train, startval, mstep = mstep.mvnorm)
+#setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+#Bamfcc1_2 <- data.frame(read.csv("Bachmfcc1_2.csv", header=F))
+#train1_2 <- list(x=Bamfcc1_2, N=dim(Bamfcc1_2)[1])
+#class(train1_2) <- "hsmm.data"
+#make the starting probability uniform
+#hmv$model$init <- rep(1/J, J) 
+#hmv.Ba <- hmmfit(train1_2, hmv$model, mstep = mstep.mvnorm)
+hmv.Ba$loglik
+```
+
+
+```{r}
+#train the Beethoven HMM
+
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Beethoven_sonata/wav")
+Bemfcc1 <- data.frame(read.csv("Beethovenmfcc1.csv", header=F))
+split.Bemfcc1 <- split(Bemfcc1, (seq(nrow(Bemfcc1))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+Beet1.mean.list <- list()
+for (i in 1:length(split.Bemfcc1)){
+  Beet1.mean.list[[i]] <- as.vector(apply(split.Bemfcc1[[i]], MARGIN=2, FUN = "mean"))
+}
+Beet1.mean.list <- data.frame(Beet1.mean.list)
+colnames(Beet1.mean.list)<-c(paste(rep("group", ncol(Beet1.mean.list)), seq(1:length(split.Bemfcc1))))
+
+#determine the state numbers and GMM clustering
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(t(Beet1.mean.list), k)$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+BIC_beet <- mclustBIC(t(Beet1.mean.list))
+plot(BIC_beet)
+mod1 <- Mclust(t(Beet1.mean.list), x = BIC_beet)
+summary(mod1, parameters = TRUE)
+
+#training
+J=mod1$G
+init0 <- rep(1/J, J)
+P <- matrix(rep(1/J, J*J), ncol = J)
+B0 <- list(mu = list(mod1$parameters$mean[,1], mod1$parameters$mean[,2], mod1$parameters$mean[,3], mod1$parameters$mean[,4]), sigma = list(mod1$parameters$variance$sigma[,,1], mod1$parameters$variance$sigma[,,2], mod1$parameters$variance$sigma[,,3], mod1$parameters$variance$sigma[,,4]))
+startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+train<-list(x=Bemfcc1, N=dim(Bemfcc1)[1])
+class(train) <- "hsmm.data"
+hmv.Be <- hmmfit(train, startval, mstep = mstep.mvnorm)
+hmv.Be$loglik
+
+```
+
+```{r}
+#train the Chopin HMM
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Chopin_nocturne/wav")
+Chmfcc1 <- data.frame(read.csv("Chopinmfcc3.csv", header=F))
+split.Chmfcc1 <- split(Chmfcc1, (seq(nrow(Chmfcc1))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+Chopin1.mean.list <- list()
+for (i in 1:length(split.Chmfcc1)){
+  Chopin1.mean.list[[i]] <- as.vector(apply(split.Chmfcc1[[i]], MARGIN=2, FUN = "mean"))
+}
+Chopin1.mean.list <- data.frame(Chopin1.mean.list)
+colnames(Chopin1.mean.list)<-c(paste(rep("group", ncol(Chopin1.mean.list)), seq(1:length(split.Chmfcc1))))
+
+#determine the state numbers and GMM clustering
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(t(Chopin1.mean.list), k)$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+BIC <- mclustBIC(t(Chopin1.mean.list))
+plot(BIC)
+mod1 <- Mclust(t(Chopin1.mean.list), x = BIC)
+summary(mod1, parameters = TRUE)
+
+#training
+J=mod1$G
+init0 <- rep(1/J, J)
+P <- matrix(rep(1/J, J*J), ncol = J)
+B0 <- list(mu=list(mod1$parameters$mean[,1], mod1$parameters$mean[,2]), sigma = list(mod1$parameters$variance$sigma[,,1], mod1$parameters$variance$sigma[,,2]))
+startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+train<-list(x=Chmfcc1, N=dim(Chmfcc1)[1])
+class(train) <- "hsmm.data"
+hmv.Ch <- hmmfit(train, startval, mstep = mstep.mvnorm)
+hmv.Ch$loglik
+```
+```{r}
+#train the Bach HMM
+
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Debussy/wav")
+Demfcc1 <- data.frame(read.csv("Debussymfcc1.csv", header=F))
+split.Demfcc1 <- split(Dmfcc1, (seq(nrow(Demfcc1))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+De1.mean.list <- list()
+for (i in 1:length(split.Demfcc1)){
+  De1.mean.list[[i]] <- as.vector(apply(split.Demfcc1[[i]], MARGIN=2, FUN = "mean"))
+}
+De1.mean.list <- data.frame(De1.mean.list)
+colnames(De1.mean.list)<-c(paste(rep("group", ncol(De1.mean.list)), seq(1:length(split.Demfcc1))))
+
+#determine the state numbers and GMM clustering
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(t(De1.mean.list), k)$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+BIC <- mclustBIC(t(De1.mean.list))
+plot(BIC)
+mod1 <- Mclust(t(De1.mean.list), x = BIC)
+summary(mod1, parameters = TRUE)
+
+#training
+J=mod1$G
+init0 <- rep(1/J, J)
+P <- matrix(rep(1/J, J*J), ncol = J)
+B0 <- list(mu = list(mod1$parameters$mean[,1], mod1$parameters$mean[,2], mod1$parameters$mean[,3]), sigma = list(mod1$parameters$variance$sigma[,,1], mod1$parameters$variance$sigma[,,2], mod1$parameters$variance$sigma[,,3]))
+#setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+#Bamfcc1_2 <- data.frame(read.csv("Bachmfcc1_2.csv", header=F))
+train<-list(x=Demfcc1, N=dim(Demfcc1)[1])
+class(train) <- "hsmm.data"
+startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+hmv.De <- hmmfit(train, startval, mstep = mstep.mvnorm)
+#train1_2 <- list(x=Bamfcc1_2, N=dim(Bamfcc1_2)[1])
+#class(train1_2) <- "hsmm.data"
+#make the starting probability uniform
+#hmv$model$init <- rep(1/J, J) 
+#hmv <- hmmfit(train1_2, hmv$model, mstep = mstep.mvnorm)
+hmv.De$loglik
+```
+
+```{r}
+#testing Bach2
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+Bamfcc2 <- data.frame(read.csv("Bachmfcc3.csv", header=F))
+Bamfcc2 <- Bamfcc2[rowSums(is.na(Bamfcc2)) != ncol(Bamfcc2),]
+test <-list(x=Bamfcc2, N=dim(Bamfcc2)[1])
+class(test) <- "hsmm.data"
+
+split.Bamfcc2 <- split(Bamfcc2, (seq(nrow(Bamfcc2))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+Bach2.mean.list <- list()
+for (i in 1:length(split.Bamfcc2)){
+  Bach2.mean.list[[i]] <- as.vector(apply(split.Bamfcc2[[i]], MARGIN=2, FUN = "mean"))
+}
+Bach2.mean.list <- t(data.frame(Bach2.mean.list))
+test<-list(x=Bach2.mean.list, N=dim(Bach2.mean.list)[1])
+class(test) <- "hsmm.data"
+
+#hmv.Ba$model$init <- rep(1/3, 3) 
+hmv_test_Ba_Ba <- hmmfit(test, hmv.Ba$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ba_Ba$loglik
+
+#hmv.Be$model$init <- rep(1/4, 4) 
+hmv_test_Ba_Be <- hmmfit(test, hmv.Be$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ba_Be$loglik
+
+#hmv.Ch$model$init <- rep(1/2, 2) 
+hmv_test_Ba_Ch <- hmmfit(test, hmv.Ch$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ba_Ch$loglik
+
+#hmv.De$model$init <- rep(1/3, 3) 
+
+hmv_test_Ba_De <- hmmfit(test, hmv.De$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ba_De$loglik
+```
+
+```{r}
+#testing Chopin2
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Chopin_nocturne/wav")
+Chmfcc2 <- data.frame(read.csv("Chopinmfcc4.csv", header=F))
+Chmfcc2 <- Chmfcc2[rowSums(is.na(Chmfcc2)) != ncol(Chmfcc2),]
+test <-list(x=Chmfcc2, N=dim(Chmfcc2)[1])
+class(test) <- "hsmm.data"
+
+#hmv.Ba$model$init <- rep(1/3, 3) 
+hmv_test_Ch_Ba <- hmmfit(test, hmv.Ba$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ch_Ba$loglik
+
+#hmv.Be$model$init <- rep(1/4, 4) 
+hmv_test_Ch_Be <- hmmfit(test, hmv.Be$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ch_Be$loglik
+
+#hmv.Ch$model$init <- rep(1/2, 2) 
+hmv_test_Ch_Ch <- hmmfit(test, hmv.Ch$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ch_Ch$loglik
+
+#hmv.De$model$init <- rep(1/3, 3) 
+hmv_test_Ch_De <- hmmfit(test, hmv.De$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_Ch_De$loglik
+```
+
+```{r}
+#testing Debussy2
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Debussy/wav")
+Demfcc2 <- data.frame(read.csv("Debussymfcc5.csv", header=F))
+Demfcc2 <- Demfcc2[rowSums(is.na(Demfcc2)) != ncol(Demfcc2),]
+test <-list(x=Demfcc2, N=dim(Demfcc2)[1])
+class(test) <- "hsmm.data"
+
+hmv.Ba$model$init <- rep(1/3, 3) 
+hmv_test_De_Ba <- hmmfit(test, hmv.Ba$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_De_Ba$loglik
+
+hmv.Be$model$init <- rep(1/4, 4) 
+hmv_test_De_Be <- hmmfit(test, hmv.Be$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_De_Be$loglik
+
+hmv.Ch$model$init <- rep(1/2, 2) 
+hmv_test_De_Ch <- hmmfit(test, hmv.Ch$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_De_Ch$loglik
+
+hmv.De$model$init <- rep(1/3, 3) 
+hmv_test_De_De <- hmmfit(test, hmv.De$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_De_De$loglik
+```
+
+```{r}
+#testing Bluegrass
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R")
+romfcc2 <- data.frame(read.csv("osborne-brothers-rocky-top.csv", header=F))
+romfcc2 <- romfcc2[rowSums(is.na(romfcc2)) != ncol(romfcc2),]
+test <-list(x=romfcc2, N=dim(romfcc2)[1])
+class(test) <- "hsmm.data"
+
+#hmv.Ba$model$init <- rep(1/3, 3) 
+hmv_test_ro_Ba <- hmmfit(test, hmv.Ba$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_ro_Ba$loglik
+
+hmv.Be$model$init <- rep(1/4, 4) 
+hmv_test_ro_Be <- hmmfit(test, hmv.Be$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_ro_Be$loglik
+
+hmv.Ch$model$init <- rep(1/2, 2) 
+hmv_test_ro_Ch <- hmmfit(test, hmv.Ch$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_testroe_Ch$loglik
+
+hmv.De$model$init <- rep(1/3, 3) 
+hmv_test_ro_De <- hmmfit(test, hmv.De$model, mstep = mstep.mvnorm, maxit = 1)
+hmv_test_ro_De$loglik
+```

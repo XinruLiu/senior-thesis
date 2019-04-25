@@ -1,0 +1,76 @@
+> train.name.list
+[[1]]
+ [1] "Bach_B_major_BWV868_fugue.csv"         "Bach_E_minor_BWV879_prelude.csv"       "Bach_B_minor_BWV869_fugue.csv"        
+ [4] "Bach_F_sharp_major_BWV882_fugue.csv"   "Bach_G_major_BWV884_fugue.csv"         "Bach_A_flat_major_BWV862_prelude.csv" 
+ [7] "Bach_B_minor_BWV869_prelude.csv"       "Bach_E_flat_BWV877_fugue.csv"          "Bach_G_minor_BWV861_fugue.csv"        
+[10] "Bach_G_minor_BWV861_prelude.csv"       "Bach_D_minor_BWV875_prelude.csv"       "Bach_B_flat_minor_BWV867_prelude.csv" 
+[13] "Bach_G_major_BWV884_prelude.csv"       "Bach_E_minor_BWV879_fugue.csv"         "Bach_F_sharp_major_BWV882_prelude.csv"
+[16] "Bach_E_flat_BWV877_prelude.csv"        "Bach_A_major_BWV864_fugue.csv"         "Bach_A_flat_major_BWV862_fugue.csv"   
+[19] "Bach_A_major_BWV864_prelude.csv"       "Bach_C_sharp_major_BWV872_fugue.csv"   "Bach_D_minor_BWV875_fugue.csv"        
+
+[[2]]
+ [1] "beethoven_op2_no1.csv"           "beethoven_op49_no2.csv"          "beethoven_op2_no2.csv"          
+ [4] "beethoven_op57_appassionata.csv" "beethoven_op53.csv"              "beethoven_op10_no1.csv"         
+ [7] "beethoven_op54.csv"              "beethoven_op31_no2_1.csv"        "beethoven_op78.csv"             
+[10] "beethoven_op14_no2.csv"          "beethoven_op31_no2_2.csv"        "beethoven_op14_no1.csv"         
+
+[[3]]
+ [1] "Nocturne_48_No2_F#_minor.csv"            "Waltz_Op._34_No.2_in_A_minor.csv"       
+ [3] "Nocturne_49_C-sharp_minor.csv"           "Waltz_Op._69_no._1_in_A_flat_major.csv" 
+ [5] "Waltz_Op._64_no._2_in_C_sharp_minor.csv" "Nocturne_08_2_Db.csv"                   
+ [7] "Waltz_Op._64_No._3_in_A-flat_major.csv"  "Nocturne_9_No2.csv"                     
+ [9] "Waltz_Op._69_no._2_in_B_minor.csv"       "Nocturne_32-1_B_major.csv"              
+[11] "Nocturne_55-2_Eb_major.csv"              "Nocturne_15_no1_F_major.csv"            
+[13] "Nocturne_55_no._1_F_minor.csv"          
+
+[[4]]
+ [1] "Debussymfcc2.csv"                              "onclassical_salvatori_debussy_images_i_2.csv" 
+ [3] "Debussymfcc3.csv"                              "onclassical_salvatori_debussy_images_ii_2.csv"
+ [5] "onclassical_salvatori_debussy_images_i_3.csv"  "1-DoctorGradusAdParnassum-g.csv"              
+ [7] "onclassical_salvatori_debussy_images_ii_1.csv" "Debussymfcc6.csv"                             
+ [9] "onclassical_salvatori_debussy_images_ii_3.csv" "Debussymfcc1.csv"                             
+[11] "Debussymfcc7.csv"                              "classical_salvatori_debussy_images_i_1.csv"   
+
+[[5]]
+ [1] "schubert_d845_3rd.csv"                            "schubert_no.9_D.575_1st.csv"                     
+ [3] "schubert_D850_1st.csv"                            "schubert_Op78_D894_2nd.csv"                      
+ [5] "schubert_no.9_D.575_3rd.csv"                      "schuber_E_Flat_Major_D_568_Allegro_moderato.csv" 
+ [7] "schubert_Op78_D894_1st.csv"                       "schubert_d960_1st.csv"                           
+ [9] "schubert_E_Flat_Major_D_568_Allegro_moderato.csv" "schubert_d845_1st.csv"                           
+[11] "schubert_D958_1st.csv"                            "schubert_d664_A_major_3rd.csv"                   
+[13] "schubert_d959_1st.csv"                            "schubert_D850_3rd.csv"                           
+
+[[6]]
+[1] "Gigue.csv"          "Schwungvoll.csv"    "Sehr_rasch.csv"     "Massige_achtel.csv" "Sehr_langsam.csv"  
+
+[[7]]
+[1] "schumann_carnaval_No.9.csv"        "schumann_sonata_f_sharp_minor.csv"
+
+> test.name.list
+[[1]]
+[1] "Bach_A_minor_BWV865_fugue.csv"         "Bach_A_minor_BWV865_prelude.csv"       "Bach_B_flat_minor_BWV867_fugue.csv"   
+[4] "Bach_B_major_BWV868_prelude.csv"       "Bach_C_minor_BWV871_fugue.csv"         "Bach_C_minor_BWV871_prelude.csv"      
+[7] "Bach_C_sharp_major_BWV872_prelude.csv"
+
+[[2]]
+[1] "beethoven_op10_no3.csv"                "beethoven_op2_no3.csv"                 "beethoven_op27_no2_Presto_agitato.csv"
+[4] "beethoven_op49_no1.csv"               
+
+[[3]]
+[1] "Nocturne_09-1_b-Minor.csv"              "Nocturne_108_C_minor.csv"              
+[3] "Waltz_B.150_in_A_minor.csv"             "Waltz_B.56_in_E_minor.csv"             
+[5] "Waltz_in_G-flat_Major_Op._70_No._1.csv"
+
+[[4]]
+[1] "2-Jimbos-Lullaby-3g.csv" "Debussymfcc4.csv"        "Debussymfcc5.csv"        "Debussymfcc8.csv"       
+
+[[5]]
+[1] "schubert_A_Minor_D_784_Allegro_vivace.csv"           "schubert_d664_A_major_1st.csv"                      
+[3] "schubert_d960_3rd.csv"                               "schubert_E_Flat_Major_D_568_Menuetto_Allegretto.csv"
+[5] "schubert_Op78_D894_3rd.csv"                         
+
+[[6]]
+[1] "Bewegte_achtel.csv"                     "Gavotte_Etwas_langsam_nicht_hastig.csv"
+
+[[7]]
+[1] "schumann_variations_abegg.csv"

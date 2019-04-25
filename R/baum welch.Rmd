@@ -1,0 +1,80 @@
+---
+title: "Baum Welch algorithm"
+output: html_notebook
+---
+
+This notebook traces the Baum Welch algorithm on a simple case. 
+
+```{r}
+library(HMM)
+# Initilize a hmm model
+hmm <- initHMM(c("s", "t"),c("A", "B"),
+              startProbs = c(0.85, 0.15),
+              transProbs = matrix(c(0.3, 0.7, 0.1, 0.9), byrow = T, nrow = 2),
+              emissionProbs=matrix(c(0.4, 0.6, 0.5, 0.5), byrow = T, nrow=2))
+hmm
+sim <- simHMM(hmm, 100)
+sim
+numofA <- 0
+numofB <- 0
+for (i in 1:100){
+  if(sim$observation[i] == "A"){
+    numofA <- numofA + 1
+  }
+  else{
+    numofB <- numofB + 1
+  }
+}
+numofA
+numofB
+
+```
+
+```{r}
+#create a sequence of 3 "A"s and run Baum Welch
+hmm <- initHMM(c("s", "t"),c("A", "B"),
+              startProbs = c(0.5, 0.5),
+              transProbs = matrix(c(0.8, 0.2, 0.2, 0.8), byrow = T, nrow = 2),
+              emissionProbs=matrix(c(0.55, 0.45, 0.55, 0.45), byrow = T, nrow=2))
+hmm
+bw <- baumWelch(hmm, sim$observation, maxIterations = 50)
+bw$hmm
+```
+```{r}
+#create another sequence and run Baum Welch
+#observation <- c( "B", "A", "B")
+observation <- c( "A", "B", "B", "A")
+bw <- baumWelch(hmm, observation, maxIterations = 10)
+bw$hmm
+```
+In this case, there is a big chance to start with S. Assume we start with "S". And then we see an "A", that means S emits an "A" and the probability that S emits an "A" is large. And then we see a B. The probability of staying in S and emit a "B" is smaller than transit to t and emit a "B". Therefore, the probability of transitting from s to t increases. Another "B". More chance to stay in t and emit "B". Finally an "A". More chance to go from t to s and emit an "A". 
+Interesting observations is the emission probability doen't change at all. 
+Times s->s: 0 
+Times S->t: 1
+Times t->t: 1
+Times t->s: 1
+```{r}
+#create another sequence and run Baum Welch
+observation <- c("A", "B", "B", "A" ,"A")
+bw <- baumWelch(hmm, observation, maxIterations = 1)
+bw$hmm
+```
+
+
+In this case, only one more "A" is added to the end. But it changes everything. Suppose starts with s. First "A" implies big chance for s to emit "A". Second letter is a "B". Suppose it transits to t and emit a B, increasing the chance for t to emit "B". Third letter is another "B". Stays in t and emit a B. Then an "A". Transit from t to s and emit an A. Finally it stays in s and emit an "A".
+This time, transition probability doesn't change at all.
+Times s->s: 1
+Times s->t: 1
+Times t->t: 1
+Times t->s: 1
+
+```{r}
+#create another sequence and run Baum Welch
+observation <- c("B", "A", "B", "A", "B")
+bw <- baumWelch(hmm, observation, maxIterations = 1)
+bw$hmm
+```
+Times s->s: 0
+Times s->t: 2
+Times t->t: 0
+Times t->s: 2

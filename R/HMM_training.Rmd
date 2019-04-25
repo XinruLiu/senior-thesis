@@ -1,0 +1,84 @@
+---
+title: "HMM training"
+output: html_notebook
+---
+
+
+
+```{r}
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+Bamfcc1 <- data.frame(read.csv("Bachmfcc1.csv", header=F))
+split.Bamfcc1 <- split(Bamfcc1, (seq(nrow(Bamfcc1))-1) %/% 30)
+#lapply(splitBamfcc1,dim)
+Bach1.mean.list <- list()
+for (i in 1:length(split.Bamfcc1)){
+  Bach1.mean.list[[i]] <- as.vector(apply(split.Bamfcc1[[i]], MARGIN=2, FUN = "mean"))
+}
+Bach1.mean.list <- data.frame(Bach1.mean.list)
+colnames(Bach1.mean.list)<-c(paste(rep("group", ncol(Bach1.mean.list)), seq(1:length(split.Bamfcc1))))
+
+#Elbow Method
+k.max <- 20
+wss <- sapply(1:k.max, 
+              function(k){kmeans(t(Bach1.mean.list), k)$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+
+#GMM clustering & BIC
+BIC <- mclustBIC(t(Bach1.mean.list))
+plot(BIC)
+mod1 <- Mclust(t(Bach1.mean.list), x = BIC)
+summary(mod1, parameters = TRUE)
+#cluster <- kmeans(t(Bach1.mean.list), 3)
+
+```
+
+```{r}
+#model training
+J=mod1$G
+init0 <- rep(1/J, J)
+P <- matrix(rep(1/J, J*J), ncol = J)
+B0 <- list(mu = list(mod1$parameters$mean[,1], mod1$parameters$mean[,2], mod1$parameters$mean[,3]), sigma = list(mod1$parameters$variance$sigma[,,1], mod1$parameters$variance$sigma[,,2], mod1$parameters$variance$sigma[,,3]))
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+Bamfcc1_2 <- data.frame(read.csv("Bachmfcc1_2.csv", header=F))
+train<-list(x=Bamfcc1, N=dim(Bamfcc1)[1])
+class(train) <- "hsmm.data"
+startval <- hmmspec(init0, P, parms.emis = B0, dens.emis = dmvnorm.hsmm)
+hmv <- hmmfit(train, startval, mstep = mstep.mvnorm)
+train1_2 <- list(x=Bamfcc1_2, N=dim(Bamfcc1_2)[1])
+class(train1_2) <- "hsmm.data"
+#make the starting probability uniform
+hmv$model$init <- rep(1/J, J)
+hmv <- hmmfit(train1_2, hmv$model, mstep = mstep.mvnorm)
+hmv$loglik
+
+#make the starting probability uniform
+hmv$model$init <- rep(1/J, J)
+#second half
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Bach_Fugue/wav")
+Bamfcc2 <- data.frame(read.csv("Bachmfcc2.csv", header=F))
+train2 <-list(x=Bamfcc2, N=dim(Bamfcc2)[1])
+class(train2) <- "hsmm.data"
+hmv2 <- hmmfit(train2, hmv$model, mstep = mstep.mvnorm, maxit=1)
+hmv2$loglik
+
+#Chopin
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Chopin_nocturne/wav")
+Cmfcc1 <- data.frame(read.csv("Chopinmfcc1.csv", header=F))
+Cmfcc1 <- Cmfcc1[rowSums(is.na(Cmfcc1)) != ncol(Cmfcc1),]
+train4 <-list(x=Cmfcc1, N=dim(Cmfcc1)[1])
+class(train4) <- "hsmm.data"
+hmv4 <- hmmfit(train4, hmv$model, mstep = mstep.mvnorm, maxit=1)
+hmv4$loglik
+
+setwd("C:/Users/Xinru/Documents/wheaton/thesis/R/Debussy/wav")
+Dmfcc <- data.frame(read.csv("Debussymfcc1.csv", header=F))
+train3 <-list(x=Dmfcc, N=dim(Dmfcc)[1])
+class(train3) <- "hsmm.data"
+hmv3 <- hmmfit(train3, hmv$model, mstep = mstep.mvnorm, maxit = 1)
+hmv3$loglik
+```
+
